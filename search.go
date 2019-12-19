@@ -154,7 +154,7 @@ func main() {
 			}
 
 			// Query for packages
-			qstr := strings.Join(c.Args().Slice(), " ")
+			qstr := strings.Join(c.Args().Slice(), "20%")
 			pkgs, err := query(qstr)
 			if err != nil {
 				return err
@@ -165,7 +165,7 @@ func main() {
 			// Reverse if needed
 			if c.Bool("reverse") {
 				rpkgs := []map[string]interface{}{}
-				for i := len(pkgs)-1; i>=0; i-- {
+				for i := len(pkgs) - 1; i >= 0; i-- {
 					rpkgs = append(rpkgs, pkgs[i])
 				}
 				pkgs = rpkgs
