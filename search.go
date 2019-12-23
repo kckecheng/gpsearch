@@ -1,12 +1,18 @@
 package main
 
 import (
+	"crypto/sha1"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
+	"path"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/urfave/cli/v2"
 )
@@ -16,6 +22,104 @@ const (
 	goDocEP = "https://api.godoc.org/search?q=" // // godoc.org API endpoint
 	ErrExit = 1                                 // ErrExit code for abnormal exist
 )
+
+var cacheDir string
+var cacheTimeOut int
+
+func init() {
+	d, ok := os.LookupEnv("GPSEARCH_CACHEDIR")
+	if ok {
+		if !exist(d) {
+			log.Fatalf("The specified cache directory %s does not exist", d)
+		}
+		cacheDir = d
+	} else {
+		cacheDir = path.Join(os.TempDir(), "gpsearch")
+		if !exist(cacheDir) {
+			err := os.Mkdir(cacheDir, 0755)
+			if err != nil {
+				log.Fatalf("Fail to create cache directory %s", cacheDir)
+			}
+		}
+	}
+}
+
+func init() {
+	cacheTimeOut = 2
+	ts, ok := os.LookupEnv("GPSEARCH_CACHETIMEOUT")
+	if ok {
+		ti, err := strconv.Atoi(ts)
+		if err != nil {
+			cacheTimeOut = ti
+		}
+	}
+}
+
+func getHashName(name string) string {
+	nameHash := fmt.Sprintf("%x", sha1.Sum([]byte(name)))
+	return nameHash
+}
+
+func exist(name string) bool {
+	_, err := os.Stat(name)
+	if err != nil && os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
+func getCacheName(name string) string {
+	fullName := path.Join(cacheDir, getHashName(name))
+	return fullName
+}
+
+func expire(name string) bool {
+	fname := getCacheName(name)
+	finfo, err := os.Stat(fname)
+	if err != nil {
+		return true
+	}
+	if time.Now().Sub(finfo.ModTime()) > time.Duration(cacheTimeOut)*time.Hour {
+		return true
+	}
+	return false
+}
+
+func loadCache(name string, data *[]map[string]interface{}) error {
+	var err error
+	fname := getCacheName(name)
+	if !exist(fname) {
+		return fmt.Errorf("Cache file does not exist")
+	}
+
+	f, err := os.Open(fname)
+	if err != nil {
+		return err
+	}
+	decoder := gob.NewDecoder(f)
+	err = decoder.Decode(&data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func dumpCache(name string, data []map[string]interface{}) error {
+	var err error
+	fname := getCacheName(name)
+	f, err := os.Create(fname)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	encoder := gob.NewEncoder(f)
+	err = encoder.Encode(data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 /* Query Result shares below format:
 {
@@ -40,6 +144,17 @@ const (
 	]
 } */
 func query(s string) ([]map[string]interface{}, error) {
+	var err error
+	expired := expire(s)
+	pkgs := []map[string]interface{}{}
+	if !expired {
+		err = loadCache(s, &pkgs)
+		if err == nil {
+			// log.Printf("Successfully load cached data")
+			return pkgs, nil
+		}
+	}
+
 	url := goDocEP + fmt.Sprintf("%s", s)
 	resp, err := http.Get(url)
 	if err != nil {
@@ -52,6 +167,12 @@ func query(s string) ([]map[string]interface{}, error) {
 	err = decoder.Decode(&data)
 	if err != nil {
 		return nil, err
+	}
+	if expired {
+		err = dumpCache(s, data["results"])
+		if err != nil {
+			// log.Printf("Cannot dump query result to cache, ignore silently")
+		}
 	}
 	return data["results"], nil
 }
