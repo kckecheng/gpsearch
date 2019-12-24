@@ -270,7 +270,7 @@ func main() {
 
 			Notes: Some packages only have few fields with data
 		`,
-		Version: "1.0.1",
+		Version: "1.1.0",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "sort",
