@@ -19,13 +19,18 @@ import (
 
 // Const definition
 const (
-	goDocEP = "https://api.godoc.org/search?q=" // // godoc.org API endpoint
+	goDocEP = "https://api.godoc.org/search?q=" // godoc.org API endpoint
 	ErrExit = 1                                 // ErrExit code for abnormal exist
 )
 
+/* Cache control varaibles:
+cacheDir: where cache is stored (/tmp/gpsearch on Linux, %TEMP%\gpsearch on Windows)
+cacheTimeOut: how long cached data will expire
+*/
 var cacheDir string
 var cacheTimeOut int
 
+// init cacheDir based on env GPSEARCH_CACHEDIR
 func init() {
 	d, ok := os.LookupEnv("GPSEARCH_CACHEDIR")
 	if ok {
@@ -44,6 +49,7 @@ func init() {
 	}
 }
 
+// init cacheTimeOut based on env GPSEARCH_CACHETIMEOUT
 func init() {
 	cacheTimeOut = 2
 	ts, ok := os.LookupEnv("GPSEARCH_CACHETIMEOUT")
@@ -55,11 +61,13 @@ func init() {
 	}
 }
 
+// getHashName return the sha1 hash string for a given string
 func getHashName(name string) string {
 	nameHash := fmt.Sprintf("%x", sha1.Sum([]byte(name)))
 	return nameHash
 }
 
+// exist check if a path exists
 func exist(name string) bool {
 	_, err := os.Stat(name)
 	if err != nil && os.IsNotExist(err) {
@@ -68,11 +76,13 @@ func exist(name string) bool {
 	return true
 }
 
+// getCacheName generate a path name based on cache directory and query string
 func getCacheName(name string) string {
 	fullName := path.Join(cacheDir, getHashName(name))
 	return fullName
 }
 
+// expire check if the cached data expires
 func expire(name string) bool {
 	fname := getCacheName(name)
 	finfo, err := os.Stat(fname)
@@ -85,6 +95,7 @@ func expire(name string) bool {
 	return false
 }
 
+// loadCache load cached data from file
 func loadCache(name string, data *[]map[string]interface{}) error {
 	var err error
 	fname := getCacheName(name)
@@ -104,6 +115,7 @@ func loadCache(name string, data *[]map[string]interface{}) error {
 	return nil
 }
 
+// dumpCache save cached data into file
 func dumpCache(name string, data []map[string]interface{}) error {
 	var err error
 	fname := getCacheName(name)
@@ -177,6 +189,7 @@ func query(s string) ([]map[string]interface{}, error) {
 	return data["results"], nil
 }
 
+// formatOut print results based on selected fields
 func formatOut(pkgs []map[string]interface{}, fields []string) {
 	for _, pkg := range pkgs {
 		for _, field := range fields {
@@ -199,6 +212,7 @@ func formatOut(pkgs []map[string]interface{}, fields []string) {
 	}
 }
 
+// sortPkgs sort packages based on a specified field
 func sortPkgs(pkgs []map[string]interface{}, field string) {
 	greater := func(i, j int) bool {
 		v1, ok1 := pkgs[i][field]
