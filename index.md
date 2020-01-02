@@ -11,5 +11,5 @@ This tiny app will query golang packages by calling the API of godoc.org. Refer 
 Usage
 -------
 
-  go get -u github.com/kckecheng/gpsearch
-  gpsearch -h
+    go get -u github.com/kckecheng/gpsearch
+    gpsearch -h
